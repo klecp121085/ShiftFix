@@ -48,97 +48,20 @@
     .low{background:#dbeafe;color:#1e40af}
     .report{white-space:pre-wrap;background:#f8fafc;border:1px dashed #b8c2d1;border-radius:12px;padding:16px;line-height:1.5}
     .empty{padding:30px;text-align:center;color:var(--muted)}
-
-    .auth-shell{
-      min-height:100vh;
-      display:grid;
-      place-items:center;
-      padding:24px;
-      background:
-        radial-gradient(circle at top left, rgba(37,99,235,.14), transparent 34%),
-        var(--bg);
-    }
-    .auth-card{
-      width:min(440px,100%);
-      background:var(--panel);
-      border:1px solid var(--border);
-      border-radius:20px;
-      padding:24px;
-      box-shadow:var(--shadow);
-    }
-    .auth-brand{display:flex;align-items:center;gap:12px;margin-bottom:20px}
-    .auth-logo{
-      width:46px;height:46px;border-radius:13px;
-      display:grid;place-items:center;
-      background:#111827;color:white;font-weight:800;font-size:20px
-    }
-    .auth-card h1{margin:0;font-size:26px}
-    .auth-card p{margin:4px 0 0;color:var(--muted)}
-    .auth-fields{display:grid;gap:14px;margin-top:20px}
-    .auth-actions{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:16px}
-    .auth-message{margin-top:14px;padding:11px 12px;border-radius:10px;font-size:14px}
-    .auth-message.info{background:#eff6ff;color:#1e40af}
-    .auth-message.error{background:#fee2e2;color:#991b1b}
-    .auth-message.success{background:#dcfce7;color:#166534}
-    .header-account{display:flex;gap:10px;align-items:center}
-    .header-account span{max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-    .header-account .btn{padding:8px 11px}
-    #appShell[hidden],#authShell[hidden]{display:none!important}
-
     @media(max-width:800px){
       .app{grid-template-columns:1fr}
       nav{display:flex;overflow:auto;border-right:0;border-bottom:1px solid var(--border);padding:10px}
       nav button{min-width:max-content;margin:0 6px 0 0}
       .grid,.form-grid{grid-template-columns:1fr}
       main{padding:14px}
-      header{align-items:flex-start;gap:12px}
-      .header-account{flex-direction:column;align-items:flex-end}
-      .header-account span{max-width:180px}
-      .auth-actions{grid-template-columns:1fr}
     }
   </style>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
 <body>
-<section id="authShell" class="auth-shell">
-  <div class="auth-card">
-    <div class="auth-brand">
-      <div class="auth-logo">SF</div>
-      <div>
-        <h1>ShiftFix</h1>
-        <p>Secure technician handoff and repair history</p>
-      </div>
-    </div>
-
-    <form id="authForm">
-      <div class="auth-fields">
-        <div>
-          <label for="authEmail">Email</label>
-          <input id="authEmail" type="email" autocomplete="email" required placeholder="technician@example.com">
-        </div>
-        <div>
-          <label for="authPassword">Password</label>
-          <input id="authPassword" type="password" autocomplete="current-password" minlength="6" required placeholder="At least 6 characters">
-        </div>
-      </div>
-      <div class="auth-actions">
-        <button id="signInButton" class="btn btn-primary" type="submit">Sign In</button>
-        <button id="signUpButton" class="btn btn-secondary" type="button">Create Account</button>
-      </div>
-      <div id="authMessage" class="auth-message info">
-        Sign in to access the shared shop database.
-      </div>
-    </form>
-  </div>
-</section>
-
-<div id="appShell" hidden>
 <header>
   <h1>ShiftFix</h1>
-  <div class="header-account">
-    <span id="userEmail">Technician</span>
-    <button class="btn btn-secondary" type="button" onclick="signOutUser()">Sign Out</button>
-  </div>
+  <span>Technician handoff & repair history MVP</span>
 </header>
 
 <div class="app">
@@ -240,7 +163,6 @@
   </main>
 </div>
 
-</div>
 
 <script>
 const SUPABASE_URL = 'https://qxvslwukyjtpuwbmfgjy.supabase.co';
@@ -252,131 +174,10 @@ if (!SUPABASE_PUBLISHABLE_KEY.startsWith('sb_publishable_')) {
 
 const db = window.supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
 
-const authShell = document.getElementById('authShell');
-const appShell = document.getElementById('appShell');
-const authForm = document.getElementById('authForm');
-const authEmail = document.getElementById('authEmail');
-const authPassword = document.getElementById('authPassword');
-const authMessage = document.getElementById('authMessage');
-const signInButton = document.getElementById('signInButton');
-const signUpButton = document.getElementById('signUpButton');
-const userEmail = document.getElementById('userEmail');
-
-let currentUser = null;
 let state = {
   equipment: [],
   tickets: []
 };
-
-function setAuthMessage(message, type='info'){
-  authMessage.textContent = message;
-  authMessage.className = `auth-message ${type}`;
-}
-
-function setAuthBusy(isBusy){
-  signInButton.disabled = isBusy;
-  signUpButton.disabled = isBusy;
-  signInButton.textContent = isBusy ? 'Please wait…' : 'Sign In';
-}
-
-async function showSignedIn(session){
-  currentUser = session?.user || null;
-  if (!currentUser) return showSignedOut();
-
-  userEmail.textContent = currentUser.email || 'Technician';
-  authShell.hidden = true;
-  appShell.hidden = false;
-  await loadData();
-}
-
-function showSignedOut(){
-  currentUser = null;
-  state = { equipment: [], tickets: [] };
-  appShell.hidden = true;
-  authShell.hidden = false;
-  authPassword.value = '';
-  setAuthMessage('Sign in to access the shared shop database.', 'info');
-}
-
-authForm.addEventListener('submit', async (event)=>{
-  event.preventDefault();
-  const email = authEmail.value.trim();
-  const password = authPassword.value;
-
-  if (!email || password.length < 6){
-    setAuthMessage('Enter a valid email and a password of at least 6 characters.', 'error');
-    return;
-  }
-
-  setAuthBusy(true);
-  const { error } = await db.auth.signInWithPassword({ email, password });
-  setAuthBusy(false);
-
-  if (error){
-    setAuthMessage(error.message, 'error');
-    return;
-  }
-
-  setAuthMessage('Signed in successfully.', 'success');
-});
-
-signUpButton.addEventListener('click', async ()=>{
-  const email = authEmail.value.trim();
-  const password = authPassword.value;
-
-  if (!email || password.length < 6){
-    setAuthMessage('Enter a valid email and a password of at least 6 characters.', 'error');
-    return;
-  }
-
-  setAuthBusy(true);
-  const { data, error } = await db.auth.signUp({
-    email,
-    password,
-    options: { emailRedirectTo: window.location.origin }
-  });
-  setAuthBusy(false);
-
-  if (error){
-    setAuthMessage(error.message, 'error');
-    return;
-  }
-
-  if (data.session){
-    setAuthMessage('Account created and signed in.', 'success');
-  } else {
-    setAuthMessage('Account created. Check your email to confirm it, then return here and sign in.', 'success');
-  }
-});
-
-async function signOutUser(){
-  const { error } = await db.auth.signOut();
-  if (error){
-    alert(`Could not sign out: ${error.message}`);
-  }
-}
-
-async function initializeAuth(){
-  const { data, error } = await db.auth.getSession();
-  if (error){
-    setAuthMessage(error.message, 'error');
-    return;
-  }
-
-  if (data.session){
-    await showSignedIn(data.session);
-  } else {
-    showSignedOut();
-  }
-
-  db.auth.onAuthStateChange(async (_event, session)=>{
-    if (session){
-      await showSignedIn(session);
-    } else {
-      showSignedOut();
-    }
-  });
-}
 
 function esc(s=''){ return String(s).replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[m])); }
 function fmtDate(iso){ return new Date(iso).toLocaleString(); }
@@ -390,7 +191,7 @@ async function loadData(){
 
   if (equipmentError || ticketsError) {
     console.error(equipmentError || ticketsError);
-    alert(`Could not load cloud data: ${(equipmentError || ticketsError).message}`);
+    alert('Could not load cloud data. Check the Supabase key and table policies.');
     return;
   }
 
@@ -648,7 +449,7 @@ function renderAll(){
   populateEquipmentSelect();
 }
 
-initializeAuth();
+loadData();
 </script>
 
 </body>
