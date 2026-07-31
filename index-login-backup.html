@@ -83,15 +83,8 @@
     .header-account{display:flex;gap:10px;align-items:center}
     .header-account span{max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
     .header-account .btn{padding:8px 11px}
-    #appShell[hidden],#authShell[hidden],#companyShell[hidden]{display:none!important}
+    #appShell[hidden],#authShell[hidden]{display:none!important}
 
-
-    .company-shell{min-height:100vh;display:grid;place-items:center;padding:24px;background:var(--bg)}
-    .company-card{width:min(520px,100%);background:var(--panel);border:1px solid var(--border);border-radius:20px;padding:24px;box-shadow:var(--shadow)}
-    .company-card h2{margin:0 0 6px}
-    .company-card p{margin:0 0 18px;color:var(--muted)}
-    .company-actions{display:flex;gap:10px;margin-top:14px;flex-wrap:wrap}
-    .company-badge{display:inline-flex;padding:5px 9px;border-radius:999px;background:#eef4ff;color:#1d4ed8;font-size:12px;font-weight:700}
     @media(max-width:800px){
       .app{grid-template-columns:1fr}
       nav{display:flex;overflow:auto;border-right:0;border-bottom:1px solid var(--border);padding:10px}
@@ -139,32 +132,11 @@
   </div>
 </section>
 
-<section id="companyShell" class="company-shell" hidden>
-  <div class="company-card">
-    <div class="auth-brand">
-      <div class="auth-logo">SF</div>
-      <div>
-        <h2>Create your company workspace</h2>
-        <p>Your equipment and tickets will be private to this company.</p>
-      </div>
-    </div>
-    <form id="companyForm">
-      <label for="companyName">Company or shop name</label>
-      <input id="companyName" required maxlength="100" placeholder="Example: Acme Maintenance">
-      <div class="company-actions">
-        <button id="createCompanyButton" class="btn btn-primary" type="submit">Create Company</button>
-        <button class="btn btn-secondary" type="button" onclick="signOutUser()">Sign Out</button>
-      </div>
-      <div id="companyMessage" class="auth-message info">You will become the administrator of this workspace.</div>
-    </form>
-  </div>
-</section>
-
 <div id="appShell" hidden>
 <header>
   <h1>ShiftFix</h1>
   <div class="header-account">
-    <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px"><span id="companyLabel" class="company-badge">No company</span><span id="userEmail">Technician</span></div>
+    <span id="userEmail">Technician</span>
     <button class="btn btn-secondary" type="button" onclick="signOutUser()">Sign Out</button>
   </div>
 </header>
@@ -281,7 +253,6 @@ if (!SUPABASE_PUBLISHABLE_KEY.startsWith('sb_publishable_')) {
 const db = window.supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
 
 const authShell = document.getElementById('authShell');
-const companyShell = document.getElementById('companyShell');
 const appShell = document.getElementById('appShell');
 const authForm = document.getElementById('authForm');
 const authEmail = document.getElementById('authEmail');
@@ -290,16 +261,8 @@ const authMessage = document.getElementById('authMessage');
 const signInButton = document.getElementById('signInButton');
 const signUpButton = document.getElementById('signUpButton');
 const userEmail = document.getElementById('userEmail');
-const companyLabel = document.getElementById('companyLabel');
-const companyForm = document.getElementById('companyForm');
-const companyName = document.getElementById('companyName');
-const companyMessage = document.getElementById('companyMessage');
-const createCompanyButton = document.getElementById('createCompanyButton');
 
 let currentUser = null;
-let currentCompanyId = null;
-let currentCompanyName = null;
-let currentRole = null;
 let state = {
   equipment: [],
   tickets: []
@@ -316,112 +279,20 @@ function setAuthBusy(isBusy){
   signInButton.textContent = isBusy ? 'Please wait…' : 'Sign In';
 }
 
-
-function setCompanyMessage(message, type='info'){
-  companyMessage.textContent = message;
-  companyMessage.className = `auth-message ${type}`;
-}
-
-async function getCurrentMembership(){
-  const { data, error } = await db
-    .from('company_members')
-    .select('company_id, role, companies(id, name)')
-    .eq('user_id', currentUser.id)
-    .limit(1)
-    .maybeSingle();
-  if (error) throw error;
-  return data;
-}
-
-async function showCompanySetup(){
-  authShell.hidden = true;
-  appShell.hidden = true;
-  companyShell.hidden = false;
-  companyName.value = '';
-  setCompanyMessage('Enter your company or shop name. You will become the administrator.', 'info');
-}
-
-async function openCompanyWorkspace(membership){
-  currentCompanyId = String(membership.company_id);
-  currentRole = membership.role || 'technician';
-  currentCompanyName = membership.companies?.name || 'Company';
-  companyLabel.textContent = `${currentCompanyName} · ${currentRole}`;
-  companyShell.hidden = true;
-  authShell.hidden = true;
-  appShell.hidden = false;
-  await loadData();
-}
-
-companyForm.addEventListener('submit', async (event)=>{
-  event.preventDefault();
-  const name = companyName.value.trim();
-  if (!name) return;
-
-  createCompanyButton.disabled = true;
-  createCompanyButton.textContent = 'Creating…';
-
-  const { data: company, error: companyError } = await db
-    .from('companies')
-    .insert({ name })
-    .select('id, name')
-    .single();
-
-  if (companyError){
-    createCompanyButton.disabled = false;
-    createCompanyButton.textContent = 'Create Company';
-    setCompanyMessage(companyError.message, 'error');
-    return;
-  }
-
-  const { error: memberError } = await db
-    .from('company_members')
-    .insert({ company_id: company.id, user_id: currentUser.id, role: 'admin' });
-
-  createCompanyButton.disabled = false;
-  createCompanyButton.textContent = 'Create Company';
-
-  if (memberError){
-    setCompanyMessage(memberError.message, 'error');
-    return;
-  }
-
-  await openCompanyWorkspace({
-    company_id: company.id,
-    role: 'admin',
-    companies: company
-  });
-});
-
 async function showSignedIn(session){
   currentUser = session?.user || null;
   if (!currentUser) return showSignedOut();
 
   userEmail.textContent = currentUser.email || 'Technician';
-
-  try {
-    const membership = await getCurrentMembership();
-    if (membership){
-      await openCompanyWorkspace(membership);
-    } else {
-      await showCompanySetup();
-    }
-  } catch (error){
-    console.error(error);
-    setAuthMessage(`Could not load company membership: ${error.message}`, 'error');
-    authShell.hidden = false;
-    companyShell.hidden = true;
-    appShell.hidden = true;
-  }
+  authShell.hidden = true;
+  appShell.hidden = false;
+  await loadData();
 }
 
 function showSignedOut(){
   currentUser = null;
-  currentCompanyId = null;
-  currentCompanyName = null;
-  currentRole = null;
   state = { equipment: [], tickets: [] };
   appShell.hidden = true;
-  companyShell.hidden = true;
   authShell.hidden = false;
   authPassword.value = '';
   setAuthMessage('Sign in to access the shared shop database.', 'info');
@@ -513,8 +384,8 @@ function badge(text, type){ return `<span class="badge ${type}">${esc(text)}</sp
 
 async function loadData(){
   const [{ data: equipment, error: equipmentError }, { data: tickets, error: ticketsError }] = await Promise.all([
-    db.from('equipment').select('*').eq('company_id', currentCompanyId).order('created_at', { ascending: true }),
-    db.from('tickets').select('*').eq('company_id', currentCompanyId).order('created_at', { ascending: false })
+    db.from('equipment').select('*').order('created_at', { ascending: true }),
+    db.from('tickets').select('*').order('created_at', { ascending: false })
   ]);
 
   if (equipmentError || ticketsError) {
@@ -614,11 +485,7 @@ equipmentForm.addEventListener('submit', async e=>{
   const location = equipmentLocation.value.trim();
   if (!name) return;
 
-  const { error } = await db.from('equipment').insert({
-    name,
-    location,
-    company_id: Number(currentCompanyId)
-  });
+  const { error } = await db.from('equipment').insert({ name, location });
   if (error) {
     console.error(error);
     alert('Could not add equipment.');
@@ -635,7 +502,7 @@ async function deleteEquipment(id){
   }
   if(!confirm('Delete this equipment?')) return;
 
-  const { error } = await db.from('equipment').delete().eq('id', Number(id)).eq('company_id', Number(currentCompanyId));
+  const { error } = await db.from('equipment').delete().eq('id', Number(id));
   if (error) {
     console.error(error);
     alert('Could not delete equipment.');
@@ -690,7 +557,6 @@ ticketForm.addEventListener('submit', async e=>{
   }
 
   const row = {
-    company_id: Number(currentCompanyId),
     equipment_id: Number(ticketEquipment.value),
     priority: ticketPriority.value,
     technician: ticketTechnician.value.trim(),
@@ -750,7 +616,7 @@ function openTicket(id){
 async function toggleStatus(id){
   const t=state.tickets.find(x=>x.id===id); if(!t) return;
   const status=t.status==='Open'?'Complete':'Open';
-  const { error } = await db.from('tickets').update({ status }).eq('id', Number(id)).eq('company_id', Number(currentCompanyId));
+  const { error } = await db.from('tickets').update({ status }).eq('id', Number(id));
   if (error) {
     console.error(error);
     alert('Could not update ticket.');
@@ -762,7 +628,7 @@ async function toggleStatus(id){
 
 async function deleteTicket(id){
   if(!confirm('Delete this ticket?')) return;
-  const { error } = await db.from('tickets').delete().eq('id', Number(id)).eq('company_id', Number(currentCompanyId));
+  const { error } = await db.from('tickets').delete().eq('id', Number(id));
   if (error) {
     console.error(error);
     alert('Could not delete ticket.');
