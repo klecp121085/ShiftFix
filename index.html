@@ -1,0 +1,338 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>ShiftFix MVP</title>
+  <style>
+    :root{
+      --bg:#f5f7fb; --panel:#ffffff; --text:#172033; --muted:#6b7280;
+      --border:#dfe5ef; --primary:#2563eb; --danger:#dc2626; --ok:#15803d;
+      --shadow:0 10px 30px rgba(31,41,55,.08);
+    }
+    *{box-sizing:border-box}
+    body{margin:0;font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:var(--bg);color:var(--text)}
+    header{background:#111827;color:white;padding:16px 22px;display:flex;align-items:center;justify-content:space-between}
+    header h1{font-size:20px;margin:0}
+    header span{font-size:13px;color:#cbd5e1}
+    .app{display:grid;grid-template-columns:230px 1fr;min-height:calc(100vh - 58px)}
+    nav{background:#fff;border-right:1px solid var(--border);padding:18px}
+    nav button{width:100%;text-align:left;border:0;background:transparent;padding:12px 14px;border-radius:10px;font-size:15px;cursor:pointer;margin-bottom:6px}
+    nav button.active,nav button:hover{background:#eef4ff;color:#1d4ed8}
+    main{padding:24px;max-width:1200px;width:100%;margin:auto}
+    .grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px}
+    .card{background:var(--panel);border:1px solid var(--border);border-radius:16px;padding:18px;box-shadow:var(--shadow)}
+    .metric{font-size:30px;font-weight:700;margin-top:6px}
+    .muted{color:var(--muted)}
+    h2{margin-top:0}
+    table{width:100%;border-collapse:collapse}
+    th,td{padding:12px 10px;border-bottom:1px solid var(--border);text-align:left;vertical-align:top}
+    th{font-size:13px;color:var(--muted)}
+    .btn{border:0;border-radius:10px;padding:10px 14px;cursor:pointer;font-weight:600}
+    .btn-primary{background:var(--primary);color:white}
+    .btn-secondary{background:#e8edf5;color:#172033}
+    .btn-danger{background:#fee2e2;color:#991b1b}
+    .toolbar{display:flex;gap:10px;justify-content:space-between;align-items:center;margin-bottom:16px;flex-wrap:wrap}
+    .toolbar .left,.toolbar .right{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+    input,select,textarea{width:100%;padding:11px 12px;border:1px solid var(--border);border-radius:10px;font:inherit;background:#fff}
+    textarea{min-height:92px;resize:vertical}
+    label{display:block;font-size:13px;font-weight:700;margin:0 0 6px}
+    .form-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+    .full{grid-column:1/-1}
+    .hidden{display:none}
+    .badge{display:inline-block;padding:4px 8px;border-radius:999px;font-size:12px;font-weight:700}
+    .open{background:#fff7ed;color:#9a3412}
+    .complete{background:#dcfce7;color:#166534}
+    .high{background:#fee2e2;color:#991b1b}
+    .medium{background:#fef3c7;color:#92400e}
+    .low{background:#dbeafe;color:#1e40af}
+    .report{white-space:pre-wrap;background:#f8fafc;border:1px dashed #b8c2d1;border-radius:12px;padding:16px;line-height:1.5}
+    .empty{padding:30px;text-align:center;color:var(--muted)}
+    @media(max-width:800px){
+      .app{grid-template-columns:1fr}
+      nav{display:flex;overflow:auto;border-right:0;border-bottom:1px solid var(--border);padding:10px}
+      nav button{min-width:max-content;margin:0 6px 0 0}
+      .grid,.form-grid{grid-template-columns:1fr}
+      main{padding:14px}
+    }
+  </style>
+</head>
+<body>
+<header>
+  <h1>ShiftFix</h1>
+  <span>Technician handoff & repair history MVP</span>
+</header>
+
+<div class="app">
+  <nav>
+    <button class="active" data-view="dashboard">Dashboard</button>
+    <button data-view="tickets">Tickets</button>
+    <button data-view="equipment">Equipment</button>
+    <button data-view="new-ticket">New Ticket</button>
+  </nav>
+
+  <main>
+    <section id="dashboard" class="view">
+      <div class="toolbar">
+        <div><h2>Dashboard</h2><div class="muted">Current shop activity</div></div>
+        <button class="btn btn-primary" onclick="showView('new-ticket')">+ New Ticket</button>
+      </div>
+      <div class="grid">
+        <div class="card"><div class="muted">Open tickets</div><div id="openCount" class="metric">0</div></div>
+        <div class="card"><div class="muted">Completed tickets</div><div id="completeCount" class="metric">0</div></div>
+        <div class="card"><div class="muted">Equipment assets</div><div id="equipmentCount" class="metric">0</div></div>
+      </div>
+      <div class="card" style="margin-top:16px">
+        <h2>Recent tickets</h2>
+        <div id="recentTickets"></div>
+      </div>
+    </section>
+
+    <section id="tickets" class="view hidden">
+      <div class="toolbar">
+        <div><h2>Tickets</h2><div class="muted">Search and manage troubleshooting work</div></div>
+        <div class="right">
+          <input id="ticketSearch" placeholder="Search tickets..." oninput="renderTickets()" style="width:220px">
+          <button class="btn btn-primary" onclick="showView('new-ticket')">+ New Ticket</button>
+        </div>
+      </div>
+      <div class="card"><div id="ticketsTable"></div></div>
+    </section>
+
+    <section id="equipment" class="view hidden">
+      <div class="toolbar">
+        <div><h2>Equipment</h2><div class="muted">Assets and repair history</div></div>
+      </div>
+      <div class="card">
+        <form id="equipmentForm" class="form-grid">
+          <div><label>Equipment name</label><input id="equipmentName" required></div>
+          <div><label>Location</label><input id="equipmentLocation"></div>
+          <div class="full"><button class="btn btn-primary" type="submit">Add Equipment</button></div>
+        </form>
+      </div>
+      <div class="card" style="margin-top:16px"><div id="equipmentList"></div></div>
+    </section>
+
+    <section id="new-ticket" class="view hidden">
+      <div class="toolbar">
+        <div><h2>New Trouble Ticket</h2><div class="muted">Document the issue and current work</div></div>
+      </div>
+      <div class="card">
+        <form id="ticketForm" class="form-grid">
+          <div>
+            <label>Equipment</label>
+            <select id="ticketEquipment" required></select>
+          </div>
+          <div>
+            <label>Priority</label>
+            <select id="ticketPriority">
+              <option>Low</option><option selected>Medium</option><option>High</option>
+            </select>
+          </div>
+          <div><label>Technician</label><input id="ticketTechnician" placeholder="Name"></div>
+          <div><label>Shift</label><input id="ticketShift" placeholder="1st, 2nd, overnight..."></div>
+          <div class="full"><label>Problem description</label><textarea id="ticketProblem" required></textarea></div>
+          <div class="full"><label>Tests performed</label><textarea id="ticketTests"></textarea></div>
+          <div class="full"><label>Measurements / results</label><textarea id="ticketMeasurements"></textarea></div>
+          <div class="full"><label>Parts inspected or replaced</label><textarea id="ticketParts"></textarea></div>
+          <div class="full"><label>Additional notes</label><textarea id="ticketNotes"></textarea></div>
+          <div class="full"><label>Recommended next action</label><textarea id="ticketNext"></textarea></div>
+          <div class="full">
+            <button class="btn btn-primary" type="submit">Create Ticket & Generate Handoff</button>
+          </div>
+        </form>
+      </div>
+      <div id="generatedReportCard" class="card hidden" style="margin-top:16px">
+        <h2>Generated Handoff Report</h2>
+        <div id="generatedReport" class="report"></div>
+        <div style="display:flex;gap:10px;margin-top:14px;flex-wrap:wrap">
+          <button class="btn btn-secondary" onclick="copyReport()">Copy Report</button>
+          <button class="btn btn-secondary" onclick="window.print()">Print / Save PDF</button>
+        </div>
+      </div>
+    </section>
+
+    <section id="ticket-detail" class="view hidden">
+      <div class="toolbar">
+        <button class="btn btn-secondary" onclick="showView('tickets')">← Back</button>
+        <div class="right" id="detailActions"></div>
+      </div>
+      <div class="card" id="ticketDetail"></div>
+    </section>
+  </main>
+</div>
+
+<script>
+const STORAGE_KEY = 'shiftfix_mvp_v1';
+let state = JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null') || {
+  equipment: [
+    {id: crypto.randomUUID(), name:'Conveyor A', location:'Receiving'},
+    {id: crypto.randomUUID(), name:'Boiler 1', location:'Mechanical Room'}
+  ],
+  tickets: []
+};
+
+function save(){ localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); renderAll(); }
+function esc(s=''){ return String(s).replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[m])); }
+function fmtDate(iso){ return new Date(iso).toLocaleString(); }
+function badge(text, type){ return `<span class="badge ${type}">${esc(text)}</span>`; }
+
+function showView(id){
+  document.querySelectorAll('.view').forEach(v=>v.classList.add('hidden'));
+  document.getElementById(id).classList.remove('hidden');
+  document.querySelectorAll('nav button').forEach(b=>b.classList.toggle('active', b.dataset.view===id));
+  if(id==='new-ticket') populateEquipmentSelect();
+  renderAll();
+}
+document.querySelectorAll('nav button').forEach(b=>b.onclick=()=>showView(b.dataset.view));
+
+function renderDashboard(){
+  const open = state.tickets.filter(t=>t.status==='Open');
+  const complete = state.tickets.filter(t=>t.status==='Complete');
+  openCount.textContent=open.length; completeCount.textContent=complete.length; equipmentCount.textContent=state.equipment.length;
+  const recent=[...state.tickets].sort((a,b)=>new Date(b.created)-new Date(a.created)).slice(0,5);
+  recentTickets.innerHTML = recent.length ? ticketTable(recent) : `<div class="empty">No tickets yet. Create your first one.</div>`;
+}
+
+function ticketTable(list){
+  return `<table>
+    <thead><tr><th>Equipment</th><th>Problem</th><th>Priority</th><th>Status</th><th>Created</th><th></th></tr></thead>
+    <tbody>${list.map(t=>{
+      const eq=state.equipment.find(e=>e.id===t.equipmentId);
+      return `<tr>
+        <td>${esc(eq?.name||'Unknown')}</td>
+        <td>${esc(t.problem.slice(0,70))}${t.problem.length>70?'…':''}</td>
+        <td>${badge(t.priority,t.priority.toLowerCase())}</td>
+        <td>${badge(t.status,t.status==='Open'?'open':'complete')}</td>
+        <td>${fmtDate(t.created)}</td>
+        <td><button class="btn btn-secondary" onclick="openTicket('${t.id}')">View</button></td>
+      </tr>`;
+    }).join('')}</tbody>
+  </table>`;
+}
+
+function renderTickets(){
+  const q=(document.getElementById('ticketSearch')?.value||'').toLowerCase();
+  const filtered=state.tickets.filter(t=>{
+    const eq=state.equipment.find(e=>e.id===t.equipmentId);
+    return [eq?.name,t.problem,t.technician,t.status,t.priority].join(' ').toLowerCase().includes(q);
+  });
+  ticketsTable.innerHTML=filtered.length?ticketTable(filtered):`<div class="empty">No matching tickets.</div>`;
+}
+
+function renderEquipment(){
+  equipmentList.innerHTML = state.equipment.length ? `<table>
+    <thead><tr><th>Name</th><th>Location</th><th>Ticket history</th><th></th></tr></thead>
+    <tbody>${state.equipment.map(e=>{
+      const count=state.tickets.filter(t=>t.equipmentId===e.id).length;
+      return `<tr><td>${esc(e.name)}</td><td>${esc(e.location||'')}</td><td>${count}</td>
+      <td><button class="btn btn-danger" onclick="deleteEquipment('${e.id}')">Delete</button></td></tr>`;
+    }).join('')}</tbody></table>` : `<div class="empty">No equipment added.</div>`;
+}
+
+function populateEquipmentSelect(){
+  ticketEquipment.innerHTML = state.equipment.map(e=>`<option value="${e.id}">${esc(e.name)}${e.location?' — '+esc(e.location):''}</option>`).join('');
+}
+
+equipmentForm.addEventListener('submit',e=>{
+  e.preventDefault();
+  state.equipment.push({id:crypto.randomUUID(),name:equipmentName.value.trim(),location:equipmentLocation.value.trim()});
+  equipmentForm.reset(); save();
+});
+
+function deleteEquipment(id){
+  if(state.tickets.some(t=>t.equipmentId===id)){ alert('This equipment has ticket history and cannot be deleted.'); return; }
+  if(confirm('Delete this equipment?')){ state.equipment=state.equipment.filter(e=>e.id!==id); save(); }
+}
+
+function makeReport(t){
+  const eq=state.equipment.find(e=>e.id===t.equipmentId);
+  return `SHIFT HANDOFF REPORT
+
+EQUIPMENT
+${eq?.name||'Unknown'}${eq?.location?` — ${eq.location}`:''}
+
+ISSUE SUMMARY
+${t.problem || 'Not provided'}
+
+PRIORITY
+${t.priority}
+
+TECHNICIAN / SHIFT
+${t.technician || 'Not provided'}${t.shift ? ` — ${t.shift}` : ''}
+
+TESTS PERFORMED
+${t.tests || 'None documented'}
+
+MEASUREMENTS / RESULTS
+${t.measurements || 'None documented'}
+
+PARTS INSPECTED OR REPLACED
+${t.parts || 'None documented'}
+
+ADDITIONAL NOTES
+${t.notes || 'None'}
+
+CURRENT STATUS
+${t.status}
+
+NEXT-SHIFT ACTIONS
+${t.next || 'No next action documented'}
+
+CREATED
+${fmtDate(t.created)}`;
+}
+
+ticketForm.addEventListener('submit',e=>{
+  e.preventDefault();
+  if(!state.equipment.length){ alert('Add equipment first.'); return; }
+  const t={
+    id:crypto.randomUUID(),
+    equipmentId:ticketEquipment.value,
+    priority:ticketPriority.value,
+    technician:ticketTechnician.value.trim(),
+    shift:ticketShift.value.trim(),
+    problem:ticketProblem.value.trim(),
+    tests:ticketTests.value.trim(),
+    measurements:ticketMeasurements.value.trim(),
+    parts:ticketParts.value.trim(),
+    notes:ticketNotes.value.trim(),
+    next:ticketNext.value.trim(),
+    status:'Open',
+    created:new Date().toISOString()
+  };
+  state.tickets.push(t); save();
+  generatedReport.textContent=makeReport(t);
+  generatedReportCard.classList.remove('hidden');
+  ticketForm.reset(); populateEquipmentSelect();
+});
+
+function openTicket(id){
+  const t=state.tickets.find(x=>x.id===id); if(!t) return;
+  const eq=state.equipment.find(e=>e.id===t.equipmentId);
+  ticketDetail.innerHTML = `
+    <h2>${esc(eq?.name||'Unknown')}</h2>
+    <p>${badge(t.priority,t.priority.toLowerCase())} ${badge(t.status,t.status==='Open'?'open':'complete')}</p>
+    <div class="report">${esc(makeReport(t))}</div>`;
+  detailActions.innerHTML = `
+    <button class="btn btn-secondary" onclick="copyText(${JSON.stringify(makeReport(t))})">Copy Report</button>
+    <button class="btn ${t.status==='Open'?'btn-primary':'btn-secondary'}" onclick="toggleStatus('${t.id}')">${t.status==='Open'?'Mark Complete':'Reopen'}</button>
+    <button class="btn btn-danger" onclick="deleteTicket('${t.id}')">Delete</button>`;
+  showView('ticket-detail');
+}
+
+function toggleStatus(id){
+  const t=state.tickets.find(x=>x.id===id); if(!t) return;
+  t.status=t.status==='Open'?'Complete':'Open'; save(); openTicket(id);
+}
+function deleteTicket(id){
+  if(confirm('Delete this ticket?')){ state.tickets=state.tickets.filter(t=>t.id!==id); save(); showView('tickets'); }
+}
+function copyText(text){ navigator.clipboard.writeText(text).then(()=>alert('Copied.')); }
+function copyReport(){ copyText(generatedReport.textContent); }
+
+function renderAll(){ renderDashboard(); renderTickets(); renderEquipment(); populateEquipmentSelect(); }
+renderAll();
+</script>
+</body>
+</html>
